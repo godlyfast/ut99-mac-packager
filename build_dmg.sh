@@ -30,12 +30,12 @@ ISO_FILE="UT_GOTY_CD1.iso"
 PATCH_API="https://api.github.com/repos/OldUnreal/UnrealTournamentPatches/releases/latest"
 
 cleanup() {
+    # Unmount before removing staging
+    if [ -n "${PATCH_MOUNT:-}" ]; then
+        hdiutil detach "$PATCH_MOUNT" -force 2>/dev/null || true
+    fi
     if [ -d "$STAGING" ]; then
         rm -rf "$STAGING"
-    fi
-    # Unmount any leftover mounts
-    if [ -n "${PATCH_MOUNT:-}" ] && [ -d "$PATCH_MOUNT" ]; then
-        hdiutil detach "$PATCH_MOUNT" -quiet 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -61,15 +61,20 @@ mkdir -p "$CACHE_DIR"
 download() {
     local url="$1" dest="$2" expected_sha="${3:-}"
 
-    if [ -f "$dest" ] && [ -n "$expected_sha" ]; then
-        local actual_sha
-        actual_sha=$(shasum -a 256 "$dest" | cut -d' ' -f1)
-        if [ "$actual_sha" = "$expected_sha" ]; then
+    if [ -f "$dest" ]; then
+        if [ -n "$expected_sha" ]; then
+            local actual_sha
+            actual_sha=$(shasum -a 256 "$dest" | cut -d' ' -f1)
+            if [ "$actual_sha" = "$expected_sha" ]; then
+                echo "  Using cached: $(basename "$dest")"
+                return 0
+            fi
+            echo "  Cached file has wrong checksum, re-downloading..."
+            rm -f "$dest"
+        else
             echo "  Using cached: $(basename "$dest")"
             return 0
         fi
-        echo "  Cached file has wrong checksum, re-downloading..."
-        rm -f "$dest"
     fi
 
     echo "  Downloading: $(basename "$dest")..."
@@ -157,22 +162,24 @@ PATCH_MOUNT=""
 # Step 5: Merge game data into the app bundle
 echo ""
 echo "--- Step 5: Merge game data into app bundle ---"
-for dir in Maps Sounds Textures Music; do
+for dir in Maps Sounds Textures Music System Help; do
     if [ -d "$ISO_EXTRACT/$dir" ]; then
         mkdir -p "$MACOS/$dir"
         echo "  Copying $dir ($(du -sh "$ISO_EXTRACT/$dir" | cut -f1))..."
-        cp -R "$ISO_EXTRACT/$dir/"* "$MACOS/$dir/"
+        # Use -n so ISO files never overwrite newer patch files
+        cp -Rn "$ISO_EXTRACT/$dir/"* "$MACOS/$dir/" 2>/dev/null || true
     fi
 done
 
-# Copy Help directory if present
-if [ -d "$ISO_EXTRACT/Help" ]; then
-    cp -R "$ISO_EXTRACT/Help/"* "$MACOS/Help/" 2>/dev/null || true
-fi
-
-# Step 6: Decompress .uz map files using UCC
+# Step 6: Re-sign so UCC can run (adding files broke the original signature)
 echo ""
-echo "--- Step 6: Decompress map files ---"
+echo "--- Step 6: Interim re-sign for UCC ---"
+xattr -cr "$BUNDLE"
+codesign --force --deep --sign - "$BUNDLE"
+
+# Step 7: Decompress .uz map files using UCC
+echo ""
+echo "--- Step 7: Decompress map files ---"
 UCC_BIN="$MACOS/UCC"
 if [ -x "$UCC_BIN" ]; then
     UZ_COUNT=$(ls "$MACOS/Maps/"*.unr.uz 2>/dev/null | wc -l | tr -d ' ')
@@ -216,20 +223,20 @@ rm -rf "$ISO_EXTRACT"
 echo ""
 echo "App bundle size: $(du -sh "$BUNDLE" | cut -f1)"
 
-# Step 7: Strip extended attributes and ad-hoc re-sign
+# Step 8: Final strip and re-sign
 echo ""
-echo "--- Step 7: Sign app bundle ---"
+echo "--- Step 8: Final sign ---"
 echo "  Stripping extended attributes..."
 xattr -cr "$BUNDLE"
 echo "  Ad-hoc re-signing..."
 codesign --force --deep --sign - "$BUNDLE"
 
-# Step 8: Add Applications symlink for drag-and-drop install UX
+# Step 9: Add Applications symlink for drag-and-drop install UX
 ln -s /Applications "$STAGING/Applications"
 
-# Step 9: Create compressed DMG
+# Step 10: Create compressed DMG
 echo ""
-echo "--- Step 8: Create DMG ---"
+echo "--- Step 9: Create DMG ---"
 mkdir -p "$OUTPUT_DIR"
 DMG_PATH="${OUTPUT_DIR}/${DMG_NAME}.dmg"
 if [ -f "$DMG_PATH" ]; then
