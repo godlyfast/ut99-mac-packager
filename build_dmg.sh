@@ -27,6 +27,10 @@ ISO_URL="https://archive.org/download/ut-goty/UT_GOTY_CD1.iso"
 ISO_SHA256="e184984ca88f001c5ddd52035d76cd64e266e26c74975161b5ed72366c74704f"
 ISO_FILE="UT_GOTY_CD1.iso"
 
+BP4_URL="https://files.oldunreal.net/utbonuspack4-zip.7z"
+BP4_SHA256="5b7a1080724a122a596c226c50d4dc7c2d7636ceaf067e9c12112014a170ffba"
+BP4_FILE="utbonuspack4-zip.7z"
+
 PATCH_API="https://api.github.com/repos/OldUnreal/UnrealTournamentPatches/releases/latest"
 
 cleanup() {
@@ -113,6 +117,10 @@ fi
 
 download "$PATCH_URL" "$CACHE_DIR/$PATCH_FILENAME"
 
+echo ""
+echo "--- Step 3: Download Bonus Pack 4 ---"
+download "$BP4_URL" "$CACHE_DIR/$BP4_FILE" "$BP4_SHA256"
+
 # Clean previous staging
 if [ -d "$STAGING" ]; then
     rm -rf "$STAGING"
@@ -139,7 +147,11 @@ mkdir -p "$ISO_EXTRACT"
     -x'!System400'
 echo "  Extracted game data."
 
-# Step 4: Mount patch DMG and copy app bundle
+echo "  Extracting Bonus Pack 4..."
+7z x -o"$ISO_EXTRACT" "$CACHE_DIR/$BP4_FILE" -y -bso0 -bsp0
+echo "  Bonus Pack 4 extracted."
+
+# Step 5: Mount patch DMG and copy app bundle
 echo ""
 echo "--- Step 4: Extract app bundle from macOS patch ---"
 PATCH_MOUNT=$(mktemp -d /tmp/ut99-patch.XXXXXX)
