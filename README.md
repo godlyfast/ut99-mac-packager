@@ -30,16 +30,18 @@ OUTPUT_DIR=~/Desktop \
 | `OUTPUT_DIR` | `.` (current directory)                                  | Where to write the DMG         |
 | `DMG_NAME`   | `UnrealTournament99-macOS`                               | Base filename for the DMG      |
 
+## For players
+
+The DMG is fully self-contained — just drag `UnrealTournament.app` to Applications and play. No installer, no extra downloads, no dependencies. All Maps, Sounds, Textures, and Music are baked into the app bundle.
+
+On first launch, macOS will block the app because it isn't notarized. Right-click the app, choose **Open**, and confirm the dialog. After that it runs normally.
+
 ## What the DMG contains
 
-- A self-contained `UnrealTournament.app` with all Maps, Sounds, Textures, and Music baked in
+- A self-contained `UnrealTournament.app` with all game data included
 - An `Applications` shortcut for drag-and-drop installation
 
 The bundle is ad-hoc code-signed so macOS will allow it to run.
-
-## First launch
-
-The app is not notarized, so macOS will block it on first open. Right-click the app and choose **Open**, then confirm in the dialog.
 
 ## License
 
